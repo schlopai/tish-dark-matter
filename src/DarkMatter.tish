@@ -1,0 +1,220 @@
+// DarkMatter.tish - Core frontmatter splitter
+
+export fn split(input, delimiters, langHint) {
+  let lines = input.split("\n")
+  if (lines.length == 0) {
+    return { data: {}, content: input, matter: "", language: langHint }
+  }
+
+  let dOpen = "---"
+  let dClose = "---"
+
+  if (delimiters) {
+    if (typeof delimiters == "string") {
+      dOpen = delimiters
+      dClose = delimiters
+    } else if (Array.isArray(delimiters)) {
+      dOpen = delimiters[0]
+      dClose = delimiters[1] || delimiters[0]
+    }
+  }
+
+  if (!delimiters) {
+    if (lines[0].startsWith("+++")) {
+      dOpen = "+++"
+      dClose = "+++"
+    } else if (lines[0].startsWith("{")) {
+      dOpen = "{"
+      dClose = "}"
+    }
+  }
+
+  let line0 = lines[0]
+  if (!line0.startsWith(dOpen) || (dOpen == "{" && line0 != "{")) {
+    // If it's starting with '{' but we didn't override above, it might be JSON block, but for standard gray-matter,
+    // if not matched, then there's no frontmatter.
+    return { data: {}, content: input, matter: "", language: langHint }
+  }
+
+  let language = langHint
+  if (dOpen == "+++") {
+    language = "toml"
+  } else if (dOpen == "{") {
+    language = "json"
+  } else if (line0.substring(dOpen.length).trim() != "") {
+    language = line0.substring(dOpen.length).trim()
+  }
+  if (!language) {
+    language = "yaml"
+  }
+
+  let i = 1
+  let foundClose = false
+  let matterLines = []
+
+  while (i < lines.length) {
+    let line = lines[i]
+    if (line.startsWith(dClose) && (dClose != "}" || line == "}")) {
+      foundClose = true
+      break
+    }
+    matterLines.push(line)
+    i++
+  }
+
+  if (!foundClose) {
+    return { data: {}, content: input, matter: "", language: langHint || "" }
+  }
+
+  let matterStr = matterLines.join("\n")
+  let contentStr = lines.slice(i + 1).join("\n")
+
+  if (dOpen == "{") {
+    matterStr = "{\n" + matterStr + "\n}"
+  }
+
+  return {
+    data: null,
+    content: contentStr,
+    matter: matterStr,
+    language: language,
+    orig: input
+  }
+}
+
+export fn parseMatter(splitResult, engines) {
+  let res = {
+    content: splitResult.content,
+    matter: splitResult.matter,
+    language: splitResult.language,
+    orig: splitResult.orig,
+    data: {}
+  }
+
+  if (splitResult.matter == "") {
+    return res
+  }
+
+  let lang = splitResult.language
+  let engineFn = engines[lang]
+  if (!engineFn) {
+    throw new Error("No engine found for language: " + lang)
+  }
+
+  try {
+    res.data = engineFn(splitResult.matter)
+  } catch (e) {
+    throw new Error("Error parsing " + lang + " frontmatter: " + e.message)
+  }
+
+  return res
+}
+
+export fn getExcerpt(content, options) {
+  if (!options || options.excerpt == null || options.excerpt == false) {
+    return null
+  }
+  let sep = typeof options.excerpt == "string" ? options.excerpt : "---"
+  let idx = content.indexOf(sep)
+  if (idx == -1) {
+    return content.trim()
+  }
+  return content.substring(0, idx).trim()
+}
+
+export fn stringify(obj, options, engines) {
+  let content = ""
+  if (typeof obj == "string") {
+    content = obj
+    obj = {}
+  } else if (obj && typeof obj == "object") {
+    content = obj.content || ""
+    if (!obj.data) {
+      obj.data = {}
+    }
+  } else {
+    throw new Error("stringify expects a string or object")
+  }
+
+  if (!obj.data || Object.keys(obj.data).length == 0) {
+    return content
+  }
+
+  let lang = (options && options.language) || "yaml"
+  let engineFn = null
+  
+  if (engines && engines[lang] && typeof engines[lang].stringify == "function") {
+    engineFn = engines[lang].stringify
+  } else if (engines && typeof engines[lang] == "function") {
+    // If it's just a parse fn, we don't have stringify
+  }
+  
+  if (!engineFn && engines && engines.stringify) {
+     let sfy = engines.stringify[lang]
+     if (sfy) engineFn = sfy
+  }
+
+  if (!engineFn) {
+    throw new Error("No stringify engine found for language: " + lang)
+  }
+
+  let matterStr = engineFn(obj.data)
+  
+  let dOpen = "---"
+  let dClose = "---"
+  if (options && options.delimiters) {
+    if (typeof options.delimiters == "string") {
+      dOpen = options.delimiters
+      dClose = options.delimiters
+    } else if (Array.isArray(options.delimiters)) {
+      dOpen = options.delimiters[0]
+      dClose = options.delimiters[1] || options.delimiters[0]
+    }
+  }
+
+  let lf = "\n"
+  return dOpen + lf + matterStr.trim() + lf + dClose + lf + content
+}
+
+export fn matterEngine(input, options, defaultEngines) {
+  if (typeof input != "string") {
+    if (input && typeof input.toString == "function") {
+      input = input.toString()
+    } else {
+      throw new Error("Input must be a string")
+    }
+  }
+
+  let opts = options || {}
+  let delimiters = opts.delimiters
+  let langHint = opts.language
+
+  let splitResult = split(input, delimiters, langHint)
+  
+  let engines = {}
+  if (defaultEngines) {
+    let defKeys = Object.keys(defaultEngines)
+    let i = 0
+    while (i < defKeys.length) {
+      let k = defKeys[i]
+      engines[k] = defaultEngines[k]
+      i++
+    }
+  }
+  if (opts.engines) {
+    let optKeys = Object.keys(opts.engines)
+    let j = 0
+    while (j < optKeys.length) {
+      let k = optKeys[j]
+      engines[k] = opts.engines[k]
+      j++
+    }
+  }
+
+  let res = parseMatter(splitResult, engines)
+  if (opts.excerpt) {
+    res.excerpt = getExcerpt(res.content, opts)
+  }
+
+  return res
+}

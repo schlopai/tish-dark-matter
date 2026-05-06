@@ -1,0 +1,512 @@
+// Native Tish YAML/TOML helpers for gray-matter–style frontmatter (no npm `yaml` / `@iarna/toml`).
+// Subset only: flat `key: value` / `key = value` lines, common scalars — not full YAML 1.2 or TOML 1.0.
+// Used by `tish build --target native` and by the compiled JS bundle (`dist/engines_native.js`).
+// Unquoted YAML numbers use a manual parser because calling `parseFloat` from nested function bodies
+// can fail native codegen (closure capture), not to change product semantics.
+
+fn numberIsFiniteLocal(n) {
+  return n === n && n !== Infinity && n !== -Infinity
+}
+
+fn engineObjectKeys(data) {
+  return Object.keys(data)
+}
+
+fn parseYamlQuotedDouble(rest) {
+  let out = ""
+  let i = 1
+  while (i < rest.length) {
+    let c = rest.charAt(i)
+    if (c === "\\" && i + 1 < rest.length) {
+      out = out + rest.charAt(i + 1)
+      i = i + 2
+      continue
+    }
+    if (c === "\"") {
+      break
+    }
+    out = out + c
+    i = i + 1
+  }
+  return out
+}
+
+fn parseYamlQuotedSingle(rest) {
+  let out = ""
+  let i = 1
+  while (i < rest.length) {
+    let c = rest.charAt(i)
+    if (c === "'") {
+      break
+    }
+    out = out + c
+    i = i + 1
+  }
+  return out
+}
+
+fn pow10Int(exp) {
+  if (exp === 0) {
+    return 1.0
+  }
+  let neg = exp < 0
+  let e = neg ? -exp : exp
+  let p = 1.0
+  let t = 0
+  while (t < e) {
+    p = p * 10.0
+    t = t + 1
+  }
+  if (neg) {
+    return 1.0 / p
+  }
+  return p
+}
+
+// Unquoted numeric scalars: optional sign, mantissa (digits with optional `.`), optional `e`/`E` exponent.
+// Matches common gray-matter / YAML frontmatter (integers, decimals, scientific). Not a full YAML 1.2 scanner.
+fn parseYamlNumberLiteral(s) {
+  let t = s.trim()
+  if (t.length === 0) {
+    return null
+  }
+  let neg = false
+  let i = 0
+  if (t.charAt(0) === "-" || t.charAt(0) === "+") {
+    if (t.charAt(0) === "-") {
+      neg = true
+    }
+    i = 1
+  }
+  if (i >= t.length) {
+    return null
+  }
+  let intPart = 0.0
+  let sawDigit = false
+  while (i < t.length && t.charAt(i) !== "." && t.charAt(i) !== "e" && t.charAt(i) !== "E") {
+    let ch = t.charAt(i)
+    if (ch < "0" || ch > "9") {
+      return null
+    }
+    intPart = intPart * 10.0 + (ch.charCodeAt(0) - 48)
+    sawDigit = true
+    i = i + 1
+  }
+  let frac = 0.0
+  if (i < t.length && t.charAt(i) === ".") {
+    i = i + 1
+    let place = 0.1
+    while (i < t.length && t.charAt(i) !== "e" && t.charAt(i) !== "E") {
+      let ch = t.charAt(i)
+      if (ch < "0" || ch > "9") {
+        return null
+      }
+      frac = frac + place * (ch.charCodeAt(0) - 48)
+      place = place * 0.1
+      sawDigit = true
+      i = i + 1
+    }
+  }
+  if (!sawDigit) {
+    return null
+  }
+  let mant = intPart + frac
+  if (i < t.length && (t.charAt(i) === "e" || t.charAt(i) === "E")) {
+    i = i + 1
+    if (i >= t.length) {
+      return null
+    }
+    let expNeg = false
+    if (t.charAt(i) === "-") {
+      expNeg = true
+      i = i + 1
+    } else if (t.charAt(i) === "+") {
+      i = i + 1
+    }
+    if (i >= t.length) {
+      return null
+    }
+    let expVal = 0
+    let expSaw = false
+    while (i < t.length) {
+      let ch = t.charAt(i)
+      if (ch < "0" || ch > "9") {
+        return null
+      }
+      expVal = expVal * 10.0 + (ch.charCodeAt(0) - 48)
+      expSaw = true
+      i = i + 1
+    }
+    if (!expSaw) {
+      return null
+    }
+    let exp = expNeg ? -expVal : expVal
+    mant = mant * pow10Int(exp)
+  }
+  if (i < t.length) {
+    return null
+  }
+  if (neg) {
+    mant = -mant
+  }
+  return mant
+}
+
+fn parseYamlScalar(rest) {
+  if (rest.startsWith("\"")) {
+    return parseYamlQuotedDouble(rest)
+  }
+  if (rest.startsWith("'")) {
+    return parseYamlQuotedSingle(rest)
+  }
+  if (rest === "true") {
+    return true
+  }
+  if (rest === "false") {
+    return false
+  }
+  if (rest === "null" || rest === "~") {
+    return null
+  }
+  let n = parseYamlNumberLiteral(rest)
+  if (n !== null) {
+    return n
+  }
+  return rest
+}
+
+export fn parseYamlFrontmatter(matterStr) {
+  let data = {}
+  let lines = matterStr.split("\n")
+  let li = 0
+  while (li < lines.length) {
+    let line = lines[li].trim()
+    if (line === "" || line.startsWith("#")) {
+      li = li + 1
+      continue
+    }
+    let ci = line.indexOf(":")
+    if (ci < 0) {
+      li = li + 1
+      continue
+    }
+    let key = line.slice(0, ci).trim()
+    let rest = line.slice(ci + 1).trim()
+    if (!key) {
+      li = li + 1
+      continue
+    }
+    data[key] = parseYamlScalar(rest)
+    li = li + 1
+  }
+  return data
+}
+
+// --- TOML subset (flat `key = value` lines) ---------------------------------
+
+fn parseTomlDoubleQuoted(rest) {
+  let out = ""
+  let i = 1
+  while (i < rest.length) {
+    let c = rest.charAt(i)
+    if (c === "\\" && i + 1 < rest.length) {
+      let n = rest.charAt(i + 1)
+      if (n === "n") {
+        out = out + "\n"
+        i = i + 2
+        continue
+      }
+      if (n === "r") {
+        out = out + "\r"
+        i = i + 2
+        continue
+      }
+      if (n === "t") {
+        out = out + "\t"
+        i = i + 2
+        continue
+      }
+      if (n === "\"" || n === "\\") {
+        out = out + n
+        i = i + 2
+        continue
+      }
+      out = out + n
+      i = i + 2
+      continue
+    }
+    if (c === "\"") {
+      break
+    }
+    out = out + c
+    i = i + 1
+  }
+  return out
+}
+
+fn parseTomlSingleQuoted(rest) {
+  let out = ""
+  let i = 1
+  while (i < rest.length) {
+    let c = rest.charAt(i)
+    if (c === "'" && i + 1 < rest.length && rest.charAt(i + 1) === "'") {
+      out = out + "'"
+      i = i + 2
+      continue
+    }
+    if (c === "'") {
+      break
+    }
+    out = out + c
+    i = i + 1
+  }
+  return out
+}
+
+fn parseTomlScalar(rest) {
+  if (rest.startsWith("\"")) {
+    return parseTomlDoubleQuoted(rest)
+  }
+  if (rest.startsWith("'")) {
+    return parseTomlSingleQuoted(rest)
+  }
+  if (rest === "true") {
+    return true
+  }
+  if (rest === "false") {
+    return false
+  }
+  let n = parseYamlNumberLiteral(rest)
+  if (n !== null) {
+    return n
+  }
+  return rest
+}
+
+export fn parseTomlFrontmatter(matterStr) {
+  let data = {}
+  let lines = matterStr.split("\n")
+  let li = 0
+  while (li < lines.length) {
+    let line = lines[li].trim()
+    if (line === "" || line.startsWith("#")) {
+      li = li + 1
+      continue
+    }
+    let eq = line.indexOf("=")
+    if (eq < 0) {
+      li = li + 1
+      continue
+    }
+    let key = line.slice(0, eq).trim()
+    let rest = line.slice(eq + 1).trim()
+    if (!key) {
+      li = li + 1
+      continue
+    }
+    data[key] = parseTomlScalar(rest)
+    li = li + 1
+  }
+  return data
+}
+
+// --- Stringify (flat objects only) ----------------------------------------
+
+fn yamlScalarNeedsQuotes(s) {
+  if (s.length === 0) {
+    return true
+  }
+  let i = 0
+  while (i < s.length) {
+    let c = s.charAt(i)
+    if (
+      c === " " ||
+      c === "\t" ||
+      c === "\n" ||
+      c === "\r" ||
+      c === ":" ||
+      c === "#" ||
+      c === "\"" ||
+      c === "'" ||
+      c === "{" ||
+      c === "}" ||
+      c === "[" ||
+      c === "]" ||
+      c === "," ||
+      c === "\\"
+    ) {
+      return true
+    }
+    i = i + 1
+  }
+  return false
+}
+
+fn yamlEscapeDouble(s) {
+  let out = ""
+  let i = 0
+  while (i < s.length) {
+    let c = s.charAt(i)
+    if (c === "\\") {
+      out = out + "\\\\"
+    } else if (c === "\"") {
+      out = out + "\\\""
+    } else if (c === "\n") {
+      out = out + "\\n"
+    } else if (c === "\r") {
+      out = out + "\\r"
+    } else if (c === "\t") {
+      out = out + "\\t"
+    } else {
+      out = out + c
+    }
+    i = i + 1
+  }
+  return out
+}
+
+fn yamlFormatScalar(v) {
+  if (v === null) {
+    return "null"
+  }
+  if (v === true) {
+    return "true"
+  }
+  if (v === false) {
+    return "false"
+  }
+  if (typeof v === "number") {
+    if (numberIsFiniteLocal(v)) {
+      return "" + v
+    }
+    return "\"\""
+  }
+  if (typeof v === "string") {
+    let s = v
+    if (!yamlScalarNeedsQuotes(s)) {
+      return s
+    }
+    return "\"" + yamlEscapeDouble(s) + "\""
+  }
+  return "\"" + yamlEscapeDouble("" + v) + "\""
+}
+
+fn yamlKeyNeedsQuotes(name) {
+  if (name.length === 0) {
+    return true
+  }
+  let i = 0
+  while (i < name.length) {
+    let c = name.charAt(i)
+    if (
+      c === " " ||
+      c === "\t" ||
+      c === ":" ||
+      c === "#" ||
+      c === "\"" ||
+      c === "'" ||
+      c === "{" ||
+      c === "}" ||
+      c === "[" ||
+      c === "]"
+    ) {
+      return true
+    }
+    i = i + 1
+  }
+  return false
+}
+
+fn yamlFormatKey(name) {
+  if (yamlKeyNeedsQuotes(name)) {
+    return "\"" + yamlEscapeDouble(name) + "\""
+  }
+  return name
+}
+
+export fn stringifyYamlFrontmatter(data) {
+  let keys = engineObjectKeys(data)
+  let lines = []
+  let ki = 0
+  while (ki < keys.length) {
+    let keyName = keys[ki]
+    let v = data[keyName]
+    lines.push(yamlFormatKey(keyName) + ": " + yamlFormatScalar(v))
+    ki = ki + 1
+  }
+  return lines.join("\n")
+}
+
+fn tomlEscapeDouble(s) {
+  return yamlEscapeDouble(s)
+}
+
+fn tomlFormatScalar(v) {
+  if (v === null) {
+    return "\"\""
+  }
+  if (v === true) {
+    return "true"
+  }
+  if (v === false) {
+    return "false"
+  }
+  if (typeof v === "number") {
+    if (numberIsFiniteLocal(v)) {
+      return "" + v
+    }
+    return "\"\""
+  }
+  if (typeof v === "string") {
+    return "\"" + tomlEscapeDouble(v) + "\""
+  }
+  return "\"" + tomlEscapeDouble("" + v) + "\""
+}
+
+fn tomlKeyNeedsQuotes(name) {
+  if (name.length === 0) {
+    return true
+  }
+  let i = 0
+  while (i < name.length) {
+    let c = name.charAt(i)
+    if (
+      c === " " ||
+      c === "\t" ||
+      c === "=" ||
+      c === "." ||
+      c === "#" ||
+      c === "\"" ||
+      c === "'" ||
+      c === "[" ||
+      c === "]" ||
+      c === "{"
+    ) {
+      return true
+    }
+    i = i + 1
+  }
+  return false
+}
+
+fn tomlFormatKey(name) {
+  if (tomlKeyNeedsQuotes(name)) {
+    return "\"" + tomlEscapeDouble(name) + "\""
+  }
+  return name
+}
+
+export fn stringifyTomlFrontmatter(data) {
+  let keys = engineObjectKeys(data)
+  let lines = []
+  let ki = 0
+  while (ki < keys.length) {
+    let keyName = keys[ki]
+    let v = data[keyName]
+    if (v !== null) {
+      lines.push(tomlFormatKey(keyName) + " = " + tomlFormatScalar(v))
+    }
+    ki = ki + 1
+  }
+  return lines.join("\n")
+}
