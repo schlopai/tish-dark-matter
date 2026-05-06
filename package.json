@@ -1,29 +1,29 @@
 {
-  "name": "@schlopai/tish-dark-matter",
+  "name": "@tishlang/dark-matter",
   "version": "0.2.0",
   "description": "Modular gray-matter compatible frontmatter parser for Tish and JS (subset YAML/TOML, zero runtime deps)",
   "type": "module",
   "license": "PIF",
   "repository": {
     "type": "git",
-    "url": "https://github.com/schlopai/tish-dark-matter.git"
+    "url": "https://github.com/tishlang/dark-matter.git"
   },
   "publishConfig": {
     "access": "public"
   },
   "tish": {
-    "module": "./src/DarkMatter.tish"
+    "module": "./src/main.tish"
   },
   "main": "./lib/index.mjs",
   "module": "./lib/index.mjs",
   "exports": {
     ".": {
-      "tish": "./src/DarkMatter.tish",
+      "tish": "./src/main.tish",
       "import": "./lib/index.mjs",
       "require": "./lib/index.mjs",
       "default": "./lib/index.mjs"
     },
-    "./engines_native.tish": "./src/engines_native.tish"
+    "./engines.tish": "./src/engines.tish"
   },
   "files": [
     "src/",
@@ -33,7 +33,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tish build --target js src/DarkMatter.tish -o dist/DarkMatter.js && node -e \"require('fs').appendFileSync('dist/DarkMatter.js', '\\nexport { matterEngine, stringify };\\n')\" && tish build --target js src/engines_native.tish -o dist/engines_native.js && node -e \"require('fs').appendFileSync('dist/engines_native.js', '\\nexport { parseYamlFrontmatter, parseTomlFrontmatter, stringifyYamlFrontmatter, stringifyTomlFrontmatter };\\n')\"",
+    "build": "tish build --target js src/main.tish -o dist/main.js && node -e \"require('fs').appendFileSync('dist/main.js', '\\nexport { matterEngine, stringify };\\n')\" && tish build --target js src/engines.tish -o dist/engines.js && node -e \"require('fs').appendFileSync('dist/engines.js', '\\nexport { parseYamlFrontmatter, parseTomlFrontmatter, stringifyYamlFrontmatter, stringifyTomlFrontmatter };\\n')\"",
     "pretest": "npm run build",
     "test": "node test/run-tests.mjs",
     "prepack": "npm run build",
@@ -44,7 +44,7 @@
     "@semantic-release/github": "^12.0.6",
     "@semantic-release/npm": "^13.1.5",
     "@semantic-release/release-notes-generator": "^14.1.0",
-    "@tishlang/tish": "^1.9.0",
+    "@tishlang/tish": "^1.7.0",
     "semantic-release": "^25.0.3"
   }
 }

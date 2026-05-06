@@ -1,4 +1,4 @@
-// DarkMatter.tish - Core frontmatter splitter
+// main.tish — core frontmatter splitter (split / parseMatter / stringify / matterEngine).
 
 export fn split(input, delimiters, langHint) {
   let lines = input.split("\n")

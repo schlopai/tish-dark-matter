@@ -127,7 +127,13 @@ jobs:
       - name: Create npm package tarball
         run: |
           npm pack
-          mv tishlang-dark-matter-*.tgz dark-matter-npm-package.tgz
+          # Tarball basename follows scope/name (e.g. tishlang-dark-matter-*.tgz vs schlopai-tish-dark-matter-*.tgz).
+          TAR=$(ls -t *.tgz | head -1)
+          if [ -z "$TAR" ] || [ ! -f "$TAR" ]; then
+            echo "No .tgz produced by npm pack"
+            exit 1
+          fi
+          mv "$TAR" dark-matter-npm-package.tgz
 
       - name: Create or update release branch and push
         env:
@@ -211,4 +217,4 @@ jobs:
             -H "X-GitHub-Api-Version: 2022-11-28" \
             -H "Content-Type: application/octet-stream" \
             --data-binary @dark-matter-npm-package.tgz \
-            "${UPLOAD_URL}?name=dark-matter-npm-package.tgz&label=npm%20package%20(@schlopai/tish-dark-matter)"
+            "${UPLOAD_URL}?name=dark-matter-npm-package.tgz&label=npm%20package%20(@tishlang/dark-matter)"

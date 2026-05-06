@@ -1,5 +1,5 @@
 // Gray-matter-style frontmatter: flat `key: value` / `key = value` subset (YAML-ish + TOML-ish scalars).
-// Compiled to `dist/engines_native.js` for JS and inlined for `tish build --target native`.
+// Compiled to `dist/engines.js` for JS and inlined for `tish build --target native`.
 // Unquoted YAML numbers use a manual parser (native codegen quirk with `parseFloat` in nested bodies).
 
 fn numberIsFiniteLocal(n) {

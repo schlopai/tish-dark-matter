@@ -1,4 +1,4 @@
-# @schlopai/tish-dark-matter
+# @tishlang/dark-matter
 
 A modular, [`gray-matter`](https://www.npmjs.com/package/gray-matter) compatible frontmatter parser for Tish and JavaScript.
 
@@ -8,7 +8,7 @@ A modular, [`gray-matter`](https://www.npmjs.com/package/gray-matter) compatible
 - Gray-matter compatible API (`matter(string, options)`).
 - Supports MDX via `language: 'mdx'` or `.mdx` files by treating it the same as `.md`.
 - Exported as both a JS library and native `.tish` code.
-- **No runtime npm dependencies**: default YAML/TOML handling uses the same Tish implementation as native builds (`src/engines_native.tish`), compiled to `dist/engines_native.js` for the JS entry.
+- **No runtime npm dependencies**: default YAML/TOML handling uses the same Tish implementation as native builds (`src/engines.tish`), compiled to `dist/engines.js` for the JS entry.
 
 ## Supported syntax (default engines)
 
@@ -22,16 +22,16 @@ Nested maps, anchors, multiline block scalars, and other advanced YAML/TOML feat
 
 ## Tish-only consumers
 
-Import the native module directly (see `package.json` export `./engines_native.tish`):
+Import the native module directly (see `package.json` export `./engines.tish`):
 
 ```tish
-import { parseYamlFrontmatter } from "@schlopai/tish-dark-matter/engines_native.tish"
+import { parseYamlFrontmatter } from "@tishlang/dark-matter/engines.tish"
 ```
 
 ## Usage
 
 ```javascript
-import matter from "@schlopai/tish-dark-matter";
+import matter from "@tishlang/dark-matter";
 
 const { data, content } = matter(`---
 title: Hello
@@ -47,7 +47,7 @@ console.log(content);    // "World!"
 You can pass a custom engine parsing function via the `engines` option:
 
 ```javascript
-import matter from "@schlopai/tish-dark-matter";
+import matter from "@tishlang/dark-matter";
 import cbor from "cbor";
 
 const result = matter(`---cbor
