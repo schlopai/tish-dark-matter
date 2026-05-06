@@ -23,11 +23,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
+      # lib/index.mjs imports dist/*.js; pretest runs `npm run build` before `npm test`.
+      - name: Build and test
         run: npm test
-
-      - name: Build
-        run: npm run build
 
   release_check:
     name: Release check (semantic-release dry-run)
