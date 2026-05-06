@@ -1,8 +1,6 @@
-// Native Tish YAML/TOML helpers for gray-matter–style frontmatter (no npm `yaml` / `@iarna/toml`).
-// Subset only: flat `key: value` / `key = value` lines, common scalars — not full YAML 1.2 or TOML 1.0.
-// Used by `tish build --target native` and by the compiled JS bundle (`dist/engines_native.js`).
-// Unquoted YAML numbers use a manual parser because calling `parseFloat` from nested function bodies
-// can fail native codegen (closure capture), not to change product semantics.
+// Gray-matter-style frontmatter: flat `key: value` / `key = value` subset (YAML-ish + TOML-ish scalars).
+// Compiled to `dist/engines_native.js` for JS and inlined for `tish build --target native`.
+// Unquoted YAML numbers use a manual parser (native codegen quirk with `parseFloat` in nested bodies).
 
 fn numberIsFiniteLocal(n) {
   return n === n && n !== Infinity && n !== -Infinity
@@ -437,10 +435,6 @@ export fn stringifyYamlFrontmatter(data) {
   return lines.join("\n")
 }
 
-fn tomlEscapeDouble(s) {
-  return yamlEscapeDouble(s)
-}
-
 fn tomlFormatScalar(v) {
   if (v === null) {
     return "\"\""
@@ -458,9 +452,9 @@ fn tomlFormatScalar(v) {
     return "\"\""
   }
   if (typeof v === "string") {
-    return "\"" + tomlEscapeDouble(v) + "\""
+    return "\"" + yamlEscapeDouble(v) + "\""
   }
-  return "\"" + tomlEscapeDouble("" + v) + "\""
+  return "\"" + yamlEscapeDouble("" + v) + "\""
 }
 
 fn tomlKeyNeedsQuotes(name) {
@@ -491,7 +485,7 @@ fn tomlKeyNeedsQuotes(name) {
 
 fn tomlFormatKey(name) {
   if (tomlKeyNeedsQuotes(name)) {
-    return "\"" + tomlEscapeDouble(name) + "\""
+    return "\"" + yamlEscapeDouble(name) + "\""
   }
   return name
 }
