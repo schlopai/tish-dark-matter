@@ -47,7 +47,7 @@ jobs:
         run: |
           TAG="${{ github.event.release.tag_name }}"
           VERSION="${TAG#v}"
-          NPM_URL="https://www.npmjs.com/package/@tishlang/dark-matter/v/${VERSION}"
+          NPM_URL="https://www.npmjs.com/package/@schlopai/tish-dark-matter/v/${VERSION}"
           RELEASE_ID="${{ github.event.release.id }}"
           REPO="${{ github.repository }}"
           # Fetch current release body from API

@@ -1,12 +1,12 @@
 {
-  "name": "@tishlang/dark-matter",
+  "name": "@schlopai/tish-dark-matter",
   "version": "0.2.0",
   "description": "Modular gray-matter compatible frontmatter parser for Tish and JS (subset YAML/TOML, zero runtime deps)",
   "type": "module",
   "license": "PIF",
   "repository": {
     "type": "git",
-    "url": "https://github.com/tishlang/dark-matter.git"
+    "url": "https://github.com/schlopai/tish-dark-matter.git"
   },
   "publishConfig": {
     "access": "public"
